@@ -271,7 +271,7 @@ func main() {
 	{
 		input := tc128.NewV(Width)
 		l2 := tc128.Sigmoid(tc128.Add(tc128.Mul(w2.Meta(), input.Meta()), b2.Meta()))
-		l3 := tc128.Sigmoid(tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta()))
+		l3 := tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta())
 		l4 := tc128.Complex(input.Meta(), l3)
 
 		l0 := tc128.Sigmoid(tc128.Add(tc128.Mul(w0.Meta(), l4), b0.Meta()))
