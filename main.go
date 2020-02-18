@@ -120,7 +120,7 @@ func main() {
 		permutations := make([][]complex128, 0, n)
 		c, i, a := make([]int, Width), 0, make([]complex128, Width)
 		for j, measure := range item.Measures {
-			a[j] = cmplx.Rect(measure, 0/*float64(j)*math.Pi/2*/)
+			a[j] = cmplx.Rect(measure, 0 /*float64(j)*math.Pi/2*/)
 		}
 
 		permutation := make([]complex128, Width)
@@ -166,17 +166,16 @@ func main() {
 	rnd := rand.New(rand.NewSource(1))
 	random128 := func(a, b float64) complex128 {
 		return complex((b-a)*rnd.Float64()+a, (b-a)*rnd.Float64()+a)
-    //return complex(rnd.NormFloat64(), rnd.NormFloat64())
 	}
 
 	parameters := make([]*tc128.V, 0, 4)
 	w0, b0 := tc128.NewV(Width, Width), tc128.NewV(Width)
 	w1, b1 := tc128.NewV(Width, Width), tc128.NewV(Width)
-  w2, b2 := tc128.NewV(Width, Width), tc128.NewV(Width)
-  w3, b3 := tc128.NewV(Width, Width), tc128.NewV(Width)
+	w2, b2 := tc128.NewV(Width, Width), tc128.NewV(Width)
+	w3, b3 := tc128.NewV(Width, Width), tc128.NewV(Width)
 	parameters = append(parameters,
-    &w0, &b0, &w1, &b1,
-    &w2, &b2, &w3, &b3)
+		&w0, &b0, &w1, &b1,
+		&w2, &b2, &w3, &b3)
 	for _, p := range parameters {
 		for i := 0; i < cap(p.X); i++ {
 			p.X = append(p.X, random128(-1, 1))
@@ -184,24 +183,18 @@ func main() {
 	}
 
 	input, output := tc128.NewV(Width, length), tc128.NewV(Width, length)
-  l2 := tc128.Sigmoid(tc128.Add(tc128.Mul(w2.Meta(), input.Meta()), b2.Meta()))
-  l3 := tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta())
-  l4 := tc128.Complex(input.Meta(), l3)
+	l2 := tc128.Sigmoid(tc128.Add(tc128.Mul(w2.Meta(), input.Meta()), b2.Meta()))
+	l3 := tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta())
+	l4 := tc128.Complex(input.Meta(), l3)
 
 	l0 := tc128.Sigmoid(tc128.Add(tc128.Mul(w0.Meta(), l4), b0.Meta()))
 	l1 := tc128.Add(tc128.Mul(w1.Meta(), l0), b1.Meta())
 	cost := tc128.Avg(tc128.Quadratic(l1, output.Meta()))
 
 	inputs, outputs := make([]complex128, 0, Width*length), make([]complex128, 0, Width*length)
-	/*for _, pair := range pairs {
-		for _, in := range pair.Input {
-			inputs = append(inputs, in...)
-			outputs = append(outputs, pair.Output...)
-		}
-	}*/
-  for _, pair := range pairs {
-    inputs = append(inputs, pair.Output...)
-    outputs = append(outputs, pair.Output...)
+	for _, pair := range pairs {
+		inputs = append(inputs, pair.Output...)
+		outputs = append(outputs, pair.Output...)
 	}
 	input.Set(inputs)
 	output.Set(outputs)
@@ -277,11 +270,11 @@ func main() {
 
 	{
 		input := tc128.NewV(Width)
-    l2 := tc128.Sigmoid(tc128.Add(tc128.Mul(w2.Meta(), input.Meta()), b2.Meta()))
-    l3 := tc128.Sigmoid(tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta()))
-    l4 := tc128.Complex(input.Meta(), l3)
+		l2 := tc128.Sigmoid(tc128.Add(tc128.Mul(w2.Meta(), input.Meta()), b2.Meta()))
+		l3 := tc128.Sigmoid(tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta()))
+		l4 := tc128.Complex(input.Meta(), l3)
 
-  	l0 := tc128.Sigmoid(tc128.Add(tc128.Mul(w0.Meta(), l4), b0.Meta()))
+		l0 := tc128.Sigmoid(tc128.Add(tc128.Mul(w0.Meta(), l4), b0.Meta()))
 
 		headers, rows := make([]string, 0, 1+2*Width), make([][]string, 0, length)
 		headers = append(headers, "label")
