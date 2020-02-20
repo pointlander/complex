@@ -6,12 +6,15 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"math"
 	"math/cmplx"
 	"math/rand"
 	"os"
 
+	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/stat"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -34,6 +37,7 @@ const (
 type Pair struct {
 	iris.Iris
 	Input  [][]complex128
+	In     []complex128
 	Output []complex128
 }
 
@@ -43,6 +47,80 @@ func Factorial(n int) int {
 		return n * Factorial(n-1)
 	}
 	return 1
+}
+
+// Value is a value
+type Value struct {
+	Class  int
+	Values []float64
+}
+
+var colors = [...]color.RGBA{
+	{R: 0xff, G: 0x00, B: 0x00, A: 255},
+	{R: 0x00, G: 0xff, B: 0x00, A: 255},
+	{R: 0x00, G: 0x00, B: 0xff, A: 255},
+}
+
+var names = [...]string{
+	"Iris-setosa",
+	"Iris-versicolor",
+	"Iris-virginica",
+}
+
+func plotData(vals []Value, name string, width int) {
+	length := len(vals)
+	values := make([]float64, 0, width*length)
+	for _, val := range vals {
+		values = append(values, val.Values...)
+	}
+	data := mat.NewDense(length, width, values)
+	rows, cols := data.Dims()
+
+	var pc stat.PC
+	ok := pc.PrincipalComponents(data, nil)
+	if !ok {
+		return
+	}
+
+	k := 2
+	var projection mat.Dense
+	projection.Mul(data, pc.VectorsTo(nil).Slice(0, cols, 0, k))
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = "iris"
+	p.X.Label.Text = "x"
+	p.Y.Label.Text = "y"
+	p.Legend.Top = true
+
+	for i := 0; i < 3; i++ {
+		label := names[i]
+		points := make(plotter.XYs, 0, rows)
+		for j := 0; j < rows; j++ {
+			if j/50 != i {
+				continue
+			}
+			points = append(points, plotter.XY{X: projection.At(j, 0), Y: projection.At(j, 1)})
+		}
+
+		scatter, err := plotter.NewScatter(points)
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		scatter.GlyphStyle.Color = colors[i]
+		p.Add(scatter)
+		p.Legend.Add(fmt.Sprintf("%s", label), scatter)
+	}
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, name)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func printTable(out io.Writer, headers []string, rows [][]string) {
@@ -147,10 +225,15 @@ func main() {
 			i++
 		}
 
+		output := make([]complex128, 0, len(permutations[0]))
+		for x, out := range permutations[0] {
+			output = append(output, cmplx.Rect(cmplx.Abs(out), float64(x)*math.Pi/4))
+		}
 		pair := Pair{
 			Iris:   item,
 			Input:  permutations,
-			Output: permutations[0],
+			In:     permutations[0],
+			Output: output,
 		}
 		pairs = append(pairs, pair)
 	}
@@ -183,17 +266,27 @@ func main() {
 	}
 
 	input, output := tc128.NewV(Width, length), tc128.NewV(Width, length)
+	zeros := tc128.NewV(Width, length)
+	for i := 0; i < cap(zeros.X); i++ {
+		zeros.X = append(zeros.X, 0)
+	}
 	l2 := tc128.Sigmoid(tc128.Add(tc128.Mul(w2.Meta(), input.Meta()), b2.Meta()))
 	l3 := tc128.Add(tc128.Mul(w3.Meta(), l2), b3.Meta())
 	l4 := tc128.Complex(input.Meta(), l3)
 
 	l0 := tc128.Sigmoid(tc128.Add(tc128.Mul(w0.Meta(), l4), b0.Meta()))
 	l1 := tc128.Add(tc128.Mul(w1.Meta(), l0), b1.Meta())
-	cost := tc128.Avg(tc128.Quadratic(l1, output.Meta()))
+
+	one := tc128.NewV(1)
+	one.X = append(one.X, 1)
+	variance := tc128.Sub(one.Meta(), tc128.Avg(tc128.Variance(tc128.T(l0))))
+
+	cost := tc128.Avg(tc128.Quadratic(tc128.Complex(l1, zeros.Meta()), tc128.Complex(output.Meta(), zeros.Meta())))
+	cost = tc128.Add(cost, variance)
 
 	inputs, outputs := make([]complex128, 0, Width*length), make([]complex128, 0, Width*length)
 	for _, pair := range pairs {
-		inputs = append(inputs, pair.Output...)
+		inputs = append(inputs, pair.In...)
 		outputs = append(outputs, pair.Output...)
 	}
 	input.Set(inputs)
@@ -282,23 +375,43 @@ func main() {
 			headers = append(headers, fmt.Sprintf("abs %d", i))
 			headers = append(headers, fmt.Sprintf("phase %d", i))
 		}
-		for _, pair := range pairs {
+		values, valuesAbs, valuesPhase := make([]Value, 0, 8), make([]Value, 0, 8), make([]Value, 0, 8)
+		for i, pair := range pairs {
 			inputs := make([]complex128, Width)
-			for j, in := range pair.Output {
+			for j, in := range pair.In {
 				inputs[j] = in
 			}
 			input.Set(inputs)
 			row := make([]string, 0, 1+2*Width)
+			val := Value{
+				Class: i / 50,
+			}
+			valAbs := Value{
+				Class: i / 50,
+			}
+			valPhase := Value{
+				Class: i / 50,
+			}
 			l0(func(a *tc128.V) bool {
 				row = append(row, pair.Label)
 				for _, value := range a.X {
+					val.Values = append(val.Values, cmplx.Abs(value))
+					val.Values = append(val.Values, cmplx.Phase(value))
+					valAbs.Values = append(valAbs.Values, cmplx.Abs(value))
+					valPhase.Values = append(valPhase.Values, cmplx.Phase(value))
 					row = append(row, fmt.Sprintf("%.8f", cmplx.Abs(value)))
 					row = append(row, fmt.Sprintf("%.8f", cmplx.Phase(value)))
 				}
 				return true
 			})
+			values = append(values, val)
+			valuesAbs = append(valuesAbs, valAbs)
+			valuesPhase = append(valuesPhase, valPhase)
 			rows = append(rows, row)
 		}
 		printTable(readme, headers, rows)
+		plotData(values, "iris.png", 2*Width)
+		plotData(valuesAbs, "irisAbs.png", Width)
+		plotData(valuesPhase, "irisPhase.png", Width)
 	}
 }
